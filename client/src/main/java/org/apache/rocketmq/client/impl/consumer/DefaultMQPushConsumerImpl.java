@@ -210,13 +210,21 @@ public class DefaultMQPushConsumerImpl implements MQConsumerInner {
         this.offsetStore = offsetStore;
     }
 
+    /**
+     * 消息拉取入口
+     * @param pullRequest
+     */
     public void pullMessage(final PullRequest pullRequest) {
+
+        // 从PullRequest中获取ProcessQueue
         final ProcessQueue processQueue = pullRequest.getProcessQueue();
+
+        // 如果处理队列当前状态未被丢弃
         if (processQueue.isDropped()) {
             log.info("the pull request[{}] is dropped.", pullRequest.toString());
             return;
         }
-
+        // 更新ProcessQueue最后拉取时间
         pullRequest.getProcessQueue().setLastPullTimestamp(System.currentTimeMillis());
 
         try {
@@ -227,12 +235,15 @@ public class DefaultMQPushConsumerImpl implements MQConsumerInner {
             return;
         }
 
+        // 如果当前任务被挂起，则将拉取任务延迟1s
         if (this.isPause()) {
             log.warn("consumer was paused, execute pull request later. instanceName={}, group={}", this.defaultMQPushConsumer.getInstanceName(), this.defaultMQPushConsumer.getConsumerGroup());
             this.executePullRequestLater(pullRequest, PULL_TIME_DELAY_MILLS_WHEN_SUSPEND);
             return;
         }
 
+        // 进行消息拉取流控
+        // 从消息消费数量与消费间隔两个维度进行控制
         long cachedMessageCount = processQueue.getMsgCount().get();
         long cachedMessageSizeInMiB = processQueue.getMsgSize().get() / (1024 * 1024);
 
@@ -546,16 +557,12 @@ public class DefaultMQPushConsumerImpl implements MQConsumerInner {
         }
     }
 
-    public void shutdown() {
-        shutdown(0);
-    }
-
-    public synchronized void shutdown(long awaitTerminateMillis) {
+    public synchronized void shutdown() {
         switch (this.serviceState) {
             case CREATE_JUST:
                 break;
             case RUNNING:
-                this.consumeMessageService.shutdown(awaitTerminateMillis);
+                this.consumeMessageService.shutdown();
                 this.persistConsumerOffset();
                 this.mQClientFactory.unregisterConsumer(this.defaultMQPushConsumer.getConsumerGroup());
                 this.mQClientFactory.shutdown();
@@ -629,7 +636,7 @@ public class DefaultMQPushConsumerImpl implements MQConsumerInner {
                 boolean registerOK = mQClientFactory.registerConsumer(this.defaultMQPushConsumer.getConsumerGroup(), this);
                 if (!registerOK) {
                     this.serviceState = ServiceState.CREATE_JUST;
-                    this.consumeMessageService.shutdown(defaultMQPushConsumer.getAwaitTerminationMillisWhenShutdown());
+                    this.consumeMessageService.shutdown();
                     throw new MQClientException("The consumer group[" + this.defaultMQPushConsumer.getConsumerGroup()
                         + "] has been created before, specify another name please." + FAQUrl.suggestTodo(FAQUrl.GROUP_NAME_DUPLICATE_URL),
                         null);

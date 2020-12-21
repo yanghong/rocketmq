@@ -19,6 +19,17 @@ package org.apache.rocketmq.broker.processor;
 import com.alibaba.fastjson.JSON;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandlerContext;
+import java.io.UnsupportedEncodingException;
+import java.net.UnknownHostException;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.Properties;
+import java.util.Set;
+import java.util.concurrent.ConcurrentMap;
 import org.apache.rocketmq.acl.AccessValidator;
 import org.apache.rocketmq.acl.plain.PlainAccessValidator;
 import org.apache.rocketmq.broker.BrokerController;
@@ -26,8 +37,8 @@ import org.apache.rocketmq.broker.client.ClientChannelInfo;
 import org.apache.rocketmq.broker.client.ConsumerGroupInfo;
 import org.apache.rocketmq.broker.filter.ConsumerFilterData;
 import org.apache.rocketmq.broker.filter.ExpressionMessageFilter;
-import org.apache.rocketmq.common.topic.TopicValidator;
 import org.apache.rocketmq.broker.transaction.queue.TransactionalMessageUtil;
+import org.apache.rocketmq.broker.topic.TopicValidator;
 import org.apache.rocketmq.common.AclConfig;
 import org.apache.rocketmq.common.MQVersion;
 import org.apache.rocketmq.common.MixAll;
@@ -111,7 +122,6 @@ import org.apache.rocketmq.logging.InternalLoggerFactory;
 import org.apache.rocketmq.remoting.common.RemotingHelper;
 import org.apache.rocketmq.remoting.exception.RemotingCommandException;
 import org.apache.rocketmq.remoting.exception.RemotingTimeoutException;
-import org.apache.rocketmq.remoting.netty.AsyncNettyRequestProcessor;
 import org.apache.rocketmq.remoting.netty.NettyRequestProcessor;
 import org.apache.rocketmq.remoting.protocol.LanguageCode;
 import org.apache.rocketmq.remoting.protocol.RemotingCommand;
@@ -126,19 +136,7 @@ import org.apache.rocketmq.store.PutMessageResult;
 import org.apache.rocketmq.store.PutMessageStatus;
 import org.apache.rocketmq.store.SelectMappedBufferResult;
 
-import java.io.UnsupportedEncodingException;
-import java.net.UnknownHostException;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.Properties;
-import java.util.Set;
-import java.util.concurrent.ConcurrentMap;
-
-public class AdminBrokerProcessor extends AsyncNettyRequestProcessor implements NettyRequestProcessor {
+public class AdminBrokerProcessor implements NettyRequestProcessor {
     private static final InternalLogger log = InternalLoggerFactory.getLogger(LoggerName.BROKER_LOGGER_NAME);
     private final BrokerController brokerController;
 
@@ -253,16 +251,29 @@ public class AdminBrokerProcessor extends AsyncNettyRequestProcessor implements 
             (CreateTopicRequestHeader) request.decodeCommandCustomHeader(CreateTopicRequestHeader.class);
         log.info("updateAndCreateTopic called by {}", RemotingHelper.parseChannelRemoteAddr(ctx.channel()));
 
-        String topic = requestHeader.getTopic();
-
-        if (!TopicValidator.validateTopic(topic, response)) {
+        if (requestHeader.getTopic().equals(this.brokerController.getBrokerConfig().getBrokerClusterName())) {
+            String errorMsg = "the topic[" + requestHeader.getTopic() + "] is conflict with system reserved words.";
+            log.warn(errorMsg);
+            response.setCode(ResponseCode.SYSTEM_ERROR);
+            response.setRemark(errorMsg);
             return response;
         }
-        if (TopicValidator.isSystemTopic(topic, response)) {
+
+        if (!TopicValidator.validateTopic(requestHeader.getTopic(), response)) {
             return response;
         }
 
-        TopicConfig topicConfig = new TopicConfig(topic);
+        try {
+            response.setCode(ResponseCode.SUCCESS);
+            response.setOpaque(request.getOpaque());
+            response.markResponseType();
+            response.setRemark(null);
+            ctx.writeAndFlush(response);
+        } catch (Exception e) {
+            log.error("Failed to produce a proper response", e);
+        }
+
+        TopicConfig topicConfig = new TopicConfig(requestHeader.getTopic());
         topicConfig.setReadQueueNums(requestHeader.getReadQueueNums());
         topicConfig.setWriteQueueNums(requestHeader.getWriteQueueNums());
         topicConfig.setTopicFilterType(requestHeader.getTopicFilterTypeEnum());
@@ -273,8 +284,7 @@ public class AdminBrokerProcessor extends AsyncNettyRequestProcessor implements 
 
         this.brokerController.registerIncrementBrokerData(topicConfig, this.brokerController.getTopicConfigManager().getDataVersion());
 
-        response.setCode(ResponseCode.SUCCESS);
-        return response;
+        return null;
     }
 
     private synchronized RemotingCommand deleteTopic(ChannelHandlerContext ctx,
@@ -285,20 +295,10 @@ public class AdminBrokerProcessor extends AsyncNettyRequestProcessor implements 
 
         log.info("deleteTopic called by {}", RemotingHelper.parseChannelRemoteAddr(ctx.channel()));
 
-        String topic = requestHeader.getTopic();
-        if (!TopicValidator.validateTopic(topic, response)) {
-            return response;
-        }
-        if (TopicValidator.isSystemTopic(topic, response)) {
-            return response;
-        }
-
-        this.brokerController.getTopicConfigManager().deleteTopicConfig(topic);
+        this.brokerController.getTopicConfigManager().deleteTopicConfig(requestHeader.getTopic());
         this.brokerController.getMessageStore()
             .cleanUnusedTopic(this.brokerController.getTopicConfigManager().getTopicConfigTable().keySet());
-        if (this.brokerController.getBrokerConfig().isAutoDeleteUnusedStats()) {
-            this.brokerController.getBrokerStatsManager().onTopicDeleted(requestHeader.getTopic());
-        }
+
         response.setCode(ResponseCode.SUCCESS);
         response.setRemark(null);
         return response;
@@ -427,7 +427,7 @@ public class AdminBrokerProcessor extends AsyncNettyRequestProcessor implements 
             responseHeader.setBrokerAddr(this.brokerController.getBrokerAddr());
             responseHeader.setBrokerName(this.brokerController.getBrokerConfig().getBrokerName());
             responseHeader.setClusterName(this.brokerController.getBrokerConfig().getBrokerClusterName());
-
+            
             response.setCode(ResponseCode.SUCCESS);
             response.setRemark(null);
             return response;
@@ -714,9 +714,6 @@ public class AdminBrokerProcessor extends AsyncNettyRequestProcessor implements 
 
         this.brokerController.getSubscriptionGroupManager().deleteSubscriptionGroupConfig(requestHeader.getGroupName());
 
-        if (this.brokerController.getBrokerConfig().isAutoDeleteUnusedStats()) {
-            this.brokerController.getBrokerStatsManager().onGroupDeleted(requestHeader.getGroupName());
-        }
         response.setCode(ResponseCode.SUCCESS);
         response.setRemark(null);
         return response;
@@ -1115,7 +1112,7 @@ public class AdminBrokerProcessor extends AsyncNettyRequestProcessor implements 
         throws RemotingCommandException {
         final RemotingCommand response = RemotingCommand.createResponseCommand(null);
 
-        Set<String> topics = TopicValidator.getSystemTopicSet();
+        Set<String> topics = this.brokerController.getTopicConfigManager().getSystemTopic();
         TopicList topicList = new TopicList();
         topicList.setTopicList(topics);
         response.setBody(topicList.encode());
@@ -1496,9 +1493,11 @@ public class AdminBrokerProcessor extends AsyncNettyRequestProcessor implements 
             response.setRemark(String.format("%d@%s is not exist!", requestHeader.getQueueId(), requestHeader.getTopic()));
             return response;
         }
-        response.setCode(ResponseCode.SUCCESS);
 
         QueryConsumeQueueResponseBody body = new QueryConsumeQueueResponseBody();
+        response.setCode(ResponseCode.SUCCESS);
+        response.setBody(body.encode());
+
         body.setMaxQueueIndex(consumeQueue.getMaxOffsetInQueue());
         body.setMinQueueIndex(consumeQueue.getMinOffsetInQueue());
 
@@ -1557,7 +1556,7 @@ public class AdminBrokerProcessor extends AsyncNettyRequestProcessor implements 
         } finally {
             result.release();
         }
-        response.setBody(body.encode());
+
         return response;
     }
 

@@ -63,10 +63,25 @@ import org.apache.rocketmq.remoting.exception.RemotingTimeoutException;
 import org.apache.rocketmq.remoting.exception.RemotingTooMuchRequestException;
 import org.apache.rocketmq.remoting.protocol.RemotingCommand;
 
+/**
+ * netty 主要通信类
+ */
+
 public class NettyRemotingServer extends NettyRemotingAbstract implements RemotingServer {
     private static final InternalLogger log = InternalLoggerFactory.getLogger(RemotingHelper.ROCKETMQ_REMOTING);
     private final ServerBootstrap serverBootstrap;
+
+    /**
+     * Worker线程池
+     */
     private final EventLoopGroup eventLoopGroupSelector;
+
+    /**
+     * Reactor主线程
+     * 负责监听TCP连接请求，建立好连接，创建SocketChannel,并注册到selector上
+     * RocketMQ的源码中会自动根据OS的类型选择NIO和Epoll，也可以通过参数配置）,然后监听真正的网络数据。
+     * 拿到网络数据后，再丢给Worker线程池（eventLoopGroupSelector，即为上面的“N”，源码中默认设置为3）
+     */
     private final EventLoopGroup eventLoopGroupBoss;
     private final NettyServerConfig nettyServerConfig;
 
@@ -74,6 +89,11 @@ public class NettyRemotingServer extends NettyRemotingAbstract implements Remoti
     private final ChannelEventListener channelEventListener;
 
     private final Timer timer = new Timer("ServerHouseKeepingService", true);
+
+    /**
+     * 在真正执行业务逻辑之前需要进行SSL验证、编解码、空闲检查、网络连接管理，这些工作交给
+     * defaultEventExecutorGroup（即为上面的“M1”，源码中默认设置为8）去做。
+     */
     private DefaultEventExecutorGroup defaultEventExecutorGroup;
 
 

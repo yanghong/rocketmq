@@ -630,6 +630,7 @@ public class DefaultMQPullConsumerImpl implements MQConsumerInner {
 
                 this.copySubscription();
 
+                // 初始化MQClientInstance、RebalanceImple（消息重新负载实现类）
                 if (this.defaultMQPullConsumer.getMessageModel() == MessageModel.CLUSTERING) {
                     this.defaultMQPullConsumer.changeInstanceNameToPID();
                 }
@@ -646,6 +647,8 @@ public class DefaultMQPullConsumerImpl implements MQConsumerInner {
                     this.defaultMQPullConsumer.getConsumerGroup(), isUnitMode());
                 this.pullAPIWrapper.registerFilterMessageHook(filterMessageHookList);
 
+                // 初始化消息进度。如果消息消费是集群模式，那么消息进度保存在Broker上；
+                // 如果是广播模式，那么消息消费进度存储在消费端
                 if (this.defaultMQPullConsumer.getOffsetStore() != null) {
                     this.offsetStore = this.defaultMQPullConsumer.getOffsetStore();
                 } else {
@@ -664,6 +667,8 @@ public class DefaultMQPullConsumerImpl implements MQConsumerInner {
 
                 this.offsetStore.load();
 
+                // 向MQClientInstance注册消费者，并启动MQClientInstance，在一个JVM中的所有消费者、生产者持有同一个MQClientInstanc
+                // MQClientInstance只会启动一次。
                 boolean registerOK = mQClientFactory.registerConsumer(this.defaultMQPullConsumer.getConsumerGroup(), this);
                 if (!registerOK) {
                     this.serviceState = ServiceState.CREATE_JUST;
@@ -737,6 +742,10 @@ public class DefaultMQPullConsumerImpl implements MQConsumerInner {
         }
     }
 
+    /**
+     * 构建主题订阅信息SubscriptionData并加入到RebalanceImpl的订阅消息中。
+     * @throws MQClientException
+     */
     private void copySubscription() throws MQClientException {
         try {
             Set<String> registerTopics = this.defaultMQPullConsumer.getRegisterTopics();

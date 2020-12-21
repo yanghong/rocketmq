@@ -33,6 +33,7 @@ import org.apache.rocketmq.client.exception.MQBrokerException;
 import org.apache.rocketmq.client.exception.MQClientException;
 import org.apache.rocketmq.client.log.ClientLogger;
 import org.apache.rocketmq.client.producer.DefaultMQProducer;
+import org.apache.rocketmq.client.producer.SendResult;
 import org.apache.rocketmq.logging.InternalLogger;
 import org.apache.rocketmq.common.message.Message;
 import org.apache.rocketmq.remoting.common.RemotingHelper;
@@ -42,155 +43,178 @@ import org.apache.rocketmq.srvutil.ServerUtil;
 public class Producer {
     public static void main(String[] args) throws MQClientException, UnsupportedEncodingException {
 
-        Options options = ServerUtil.buildCommandlineOptions(new Options());
-        CommandLine commandLine = ServerUtil.parseCmdLine("benchmarkProducer", args, buildCommandlineOptions(options), new PosixParser());
-        if (null == commandLine) {
-            System.exit(-1);
-        }
 
-        final String topic = commandLine.hasOption('t') ? commandLine.getOptionValue('t').trim() : "BenchmarkTest";
-        final int threadCount = commandLine.hasOption('w') ? Integer.parseInt(commandLine.getOptionValue('w')) : 64;
-        final int messageSize = commandLine.hasOption('s') ? Integer.parseInt(commandLine.getOptionValue('s')) : 128;
-        final boolean keyEnable = commandLine.hasOption('k') && Boolean.parseBoolean(commandLine.getOptionValue('k'));
-        final int propertySize = commandLine.hasOption('p') ? Integer.parseInt(commandLine.getOptionValue('p')) : 0;
-
-        System.out.printf("topic %s threadCount %d messageSize %d keyEnable %s%n", topic, threadCount, messageSize, keyEnable);
-
-        final InternalLogger log = ClientLogger.getLog();
-
-        final ExecutorService sendThreadPool = Executors.newFixedThreadPool(threadCount);
-
-        final StatsBenchmarkProducer statsBenchmark = new StatsBenchmarkProducer();
-
-        final Timer timer = new Timer("BenchmarkTimerThread", true);
-
-        final LinkedList<Long[]> snapshotList = new LinkedList<Long[]>();
-
-        timer.scheduleAtFixedRate(new TimerTask() {
-            @Override
-            public void run() {
-                snapshotList.addLast(statsBenchmark.createSnapshot());
-                if (snapshotList.size() > 10) {
-                    snapshotList.removeFirst();
-                }
-            }
-        }, 1000, 1000);
-
-        timer.scheduleAtFixedRate(new TimerTask() {
-            private void printStats() {
-                if (snapshotList.size() >= 10) {
-                    Long[] begin = snapshotList.getFirst();
-                    Long[] end = snapshotList.getLast();
-
-                    final long sendTps = (long) (((end[3] - begin[3]) / (double) (end[0] - begin[0])) * 1000L);
-                    final double averageRT = (end[5] - begin[5]) / (double) (end[3] - begin[3]);
-
-                    System.out.printf("Send TPS: %d Max RT: %d Average RT: %7.3f Send Failed: %d Response Failed: %d%n",
-                        sendTps, statsBenchmark.getSendMessageMaxRT().get(), averageRT, end[2], end[4]);
-                }
-            }
-
-            @Override
-            public void run() {
-                try {
-                    this.printStats();
-                } catch (Exception e) {
-                    e.printStackTrace();
-                }
-            }
-        }, 10000, 10000);
-
-        final DefaultMQProducer producer = new DefaultMQProducer("benchmark_producer");
-        producer.setInstanceName(Long.toString(System.currentTimeMillis()));
-
-        if (commandLine.hasOption('n')) {
-            String ns = commandLine.getOptionValue('n');
-            producer.setNamesrvAddr(ns);
-        }
-
-        producer.setCompressMsgBodyOverHowmuch(Integer.MAX_VALUE);
-
+        DefaultMQProducer producer = new DefaultMQProducer("please_rename");
+        producer.setNamesrvAddr("127.0.0.1:9876");
         producer.start();
 
-        for (int i = 0; i < threadCount; i++) {
-            sendThreadPool.execute(new Runnable() {
-                @Override
-                public void run() {
-                    while (true) {
-                        try {
-                            final Message msg;
-                            try {
-                                msg = buildMessage(messageSize, topic);
-                            } catch (UnsupportedEncodingException e) {
-                                e.printStackTrace();
-                                return;
-                            }
-                            final long beginTimestamp = System.currentTimeMillis();
-                            if (keyEnable) {
-                                msg.setKeys(String.valueOf(beginTimestamp / 1000));
-                            }
-                            if (propertySize > 0) {
-                                if (msg.getProperties() != null) {
-                                    msg.getProperties().clear();
-                                }
-                                int i = 0;
-                                int startValue = (new Random(System.currentTimeMillis())).nextInt(100);
-                                int size = 0;
-                                while (true) {
-                                    String prop1 = "prop" + i, prop1V = "hello" + startValue;
-                                    String prop2 = "prop" + (i + 1), prop2V = String.valueOf(startValue);
-                                    msg.putUserProperty(prop1, prop1V);
-                                    msg.putUserProperty(prop2, prop2V);
-                                    size += prop1.length() + prop2.length() + prop1V.length() + prop2V.length();
-                                    if (size > propertySize) {
-                                        break;
-                                    }
-                                    i += 2;
-                                    startValue += 2;
-                                }
-                            }
-                            producer.send(msg);
-                            statsBenchmark.getSendRequestSuccessCount().incrementAndGet();
-                            statsBenchmark.getReceiveResponseSuccessCount().incrementAndGet();
-                            final long currentRT = System.currentTimeMillis() - beginTimestamp;
-                            statsBenchmark.getSendMessageSuccessTimeTotal().addAndGet(currentRT);
-                            long prevMaxRT = statsBenchmark.getSendMessageMaxRT().get();
-                            while (currentRT > prevMaxRT) {
-                                boolean updated = statsBenchmark.getSendMessageMaxRT().compareAndSet(prevMaxRT, currentRT);
-                                if (updated)
-                                    break;
+        for (int i=0; i<1; i++) {
+            try{
+                Message msg = new Message("TopicTest"/* Topic */,"TagA" /* Tag*/,(":Hello TocketMq" + i).getBytes
+                        (RemotingHelper.DEFAULT_CHARSET)/*Message body*/);
+                SendResult result = producer.send(msg);
+                System.out.printf("%s%n", result);
+            } catch (Exception e) {
+              e.printStackTrace();
+              try {Thread.sleep(1000);} catch (Exception e1) {
+                  System.out.println(e1);
+              }
 
-                                prevMaxRT = statsBenchmark.getSendMessageMaxRT().get();
-                            }
-                        } catch (RemotingException e) {
-                            statsBenchmark.getSendRequestFailedCount().incrementAndGet();
-                            log.error("[BENCHMARK_PRODUCER] Send Exception", e);
-
-                            try {
-                                Thread.sleep(3000);
-                            } catch (InterruptedException ignored) {
-                            }
-                        } catch (InterruptedException e) {
-                            statsBenchmark.getSendRequestFailedCount().incrementAndGet();
-                            try {
-                                Thread.sleep(3000);
-                            } catch (InterruptedException e1) {
-                            }
-                        } catch (MQClientException e) {
-                            statsBenchmark.getSendRequestFailedCount().incrementAndGet();
-                            log.error("[BENCHMARK_PRODUCER] Send Exception", e);
-                        } catch (MQBrokerException e) {
-                            statsBenchmark.getReceiveResponseFailedCount().incrementAndGet();
-                            log.error("[BENCHMARK_PRODUCER] Send Exception", e);
-                            try {
-                                Thread.sleep(3000);
-                            } catch (InterruptedException ignored) {
-                            }
-                        }
-                    }
-                }
-            });
+            }
         }
+        producer.shutdown();
+
+
+
+//        Options options = ServerUtil.buildCommandlineOptions(new Options());
+//        CommandLine commandLine = ServerUtil.parseCmdLine("benchmarkProducer", args, buildCommandlineOptions(options), new PosixParser());
+//        if (null == commandLine) {
+//            System.exit(-1);
+//        }
+//
+//        final String topic = commandLine.hasOption('t') ? commandLine.getOptionValue('t').trim() : "BenchmarkTest";
+//        final int threadCount = commandLine.hasOption('w') ? Integer.parseInt(commandLine.getOptionValue('w')) : 64;
+//        final int messageSize = commandLine.hasOption('s') ? Integer.parseInt(commandLine.getOptionValue('s')) : 128;
+//        final boolean keyEnable = commandLine.hasOption('k') && Boolean.parseBoolean(commandLine.getOptionValue('k'));
+//        final int propertySize = commandLine.hasOption('p') ? Integer.parseInt(commandLine.getOptionValue('p')) : 0;
+//
+//        System.out.printf("topic %s threadCount %d messageSize %d keyEnable %s%n", topic, threadCount, messageSize, keyEnable);
+//
+//        final InternalLogger log = ClientLogger.getLog();
+//
+//        final ExecutorService sendThreadPool = Executors.newFixedThreadPool(threadCount);
+//
+//        final StatsBenchmarkProducer statsBenchmark = new StatsBenchmarkProducer();
+//
+//        final Timer timer = new Timer("BenchmarkTimerThread", true);
+//
+//        final LinkedList<Long[]> snapshotList = new LinkedList<Long[]>();
+//
+//        timer.scheduleAtFixedRate(new TimerTask() {
+//            @Override
+//            public void run() {
+//                snapshotList.addLast(statsBenchmark.createSnapshot());
+//                if (snapshotList.size() > 10) {
+//                    snapshotList.removeFirst();
+//                }
+//            }
+//        }, 1000, 1000);
+//
+//        timer.scheduleAtFixedRate(new TimerTask() {
+//            private void printStats() {
+//                if (snapshotList.size() >= 10) {
+//                    Long[] begin = snapshotList.getFirst();
+//                    Long[] end = snapshotList.getLast();
+//
+//                    final long sendTps = (long) (((end[3] - begin[3]) / (double) (end[0] - begin[0])) * 1000L);
+//                    final double averageRT = (end[5] - begin[5]) / (double) (end[3] - begin[3]);
+//
+//                    System.out.printf("Send TPS: %d Max RT: %d Average RT: %7.3f Send Failed: %d Response Failed: %d%n",
+//                        sendTps, statsBenchmark.getSendMessageMaxRT().get(), averageRT, end[2], end[4]);
+//                }
+//            }
+//
+//            @Override
+//            public void run() {
+//                try {
+//                    this.printStats();
+//                } catch (Exception e) {
+//                    e.printStackTrace();
+//                }
+//            }
+//        }, 10000, 10000);
+//
+//        final DefaultMQProducer producer = new DefaultMQProducer("benchmark_producer");
+//        producer.setInstanceName(Long.toString(System.currentTimeMillis()));
+//
+//        if (commandLine.hasOption('n')) {
+//            String ns = commandLine.getOptionValue('n');
+//            producer.setNamesrvAddr(ns);
+//        }
+//
+//        producer.setCompressMsgBodyOverHowmuch(Integer.MAX_VALUE);
+//
+//        producer.start();
+//
+//        for (int i = 0; i < threadCount; i++) {
+//            sendThreadPool.execute(new Runnable() {
+//                @Override
+//                public void run() {
+//                    while (true) {
+//                        try {
+//                            final Message msg;
+//                            try {
+//                                msg = buildMessage(messageSize, topic);
+//                            } catch (UnsupportedEncodingException e) {
+//                                e.printStackTrace();
+//                                return;
+//                            }
+//                            final long beginTimestamp = System.currentTimeMillis();
+//                            if (keyEnable) {
+//                                msg.setKeys(String.valueOf(beginTimestamp / 1000));
+//                            }
+//                            if (propertySize > 0) {
+//                                if (msg.getProperties() != null) {
+//                                    msg.getProperties().clear();
+//                                }
+//                                int i = 0;
+//                                int startValue = (new Random(System.currentTimeMillis())).nextInt(100);
+//                                int size = 0;
+//                                while (true) {
+//                                    String prop1 = "prop" + i, prop1V = "hello" + startValue;
+//                                    String prop2 = "prop" + (i + 1), prop2V = String.valueOf(startValue);
+//                                    msg.putUserProperty(prop1, prop1V);
+//                                    msg.putUserProperty(prop2, prop2V);
+//                                    size += prop1.length() + prop2.length() + prop1V.length() + prop2V.length();
+//                                    if (size > propertySize) {
+//                                        break;
+//                                    }
+//                                    i += 2;
+//                                    startValue += 2;
+//                                }
+//                            }
+//                            producer.send(msg);
+//                            statsBenchmark.getSendRequestSuccessCount().incrementAndGet();
+//                            statsBenchmark.getReceiveResponseSuccessCount().incrementAndGet();
+//                            final long currentRT = System.currentTimeMillis() - beginTimestamp;
+//                            statsBenchmark.getSendMessageSuccessTimeTotal().addAndGet(currentRT);
+//                            long prevMaxRT = statsBenchmark.getSendMessageMaxRT().get();
+//                            while (currentRT > prevMaxRT) {
+//                                boolean updated = statsBenchmark.getSendMessageMaxRT().compareAndSet(prevMaxRT, currentRT);
+//                                if (updated)
+//                                    break;
+//
+//                                prevMaxRT = statsBenchmark.getSendMessageMaxRT().get();
+//                            }
+//                        } catch (RemotingException e) {
+//                            statsBenchmark.getSendRequestFailedCount().incrementAndGet();
+//                            log.error("[BENCHMARK_PRODUCER] Send Exception", e);
+//
+//                            try {
+//                                Thread.sleep(3000);
+//                            } catch (InterruptedException ignored) {
+//                            }
+//                        } catch (InterruptedException e) {
+//                            statsBenchmark.getSendRequestFailedCount().incrementAndGet();
+//                            try {
+//                                Thread.sleep(3000);
+//                            } catch (InterruptedException e1) {
+//                            }
+//                        } catch (MQClientException e) {
+//                            statsBenchmark.getSendRequestFailedCount().incrementAndGet();
+//                            log.error("[BENCHMARK_PRODUCER] Send Exception", e);
+//                        } catch (MQBrokerException e) {
+//                            statsBenchmark.getReceiveResponseFailedCount().incrementAndGet();
+//                            log.error("[BENCHMARK_PRODUCER] Send Exception", e);
+//                            try {
+//                                Thread.sleep(3000);
+//                            } catch (InterruptedException ignored) {
+//                            }
+//                        }
+//                    }
+//                }
+//            });
+//        }
     }
 
     public static Options buildCommandlineOptions(final Options options) {

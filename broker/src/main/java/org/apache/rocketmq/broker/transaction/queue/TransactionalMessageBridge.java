@@ -47,7 +47,6 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class TransactionalMessageBridge {
@@ -194,10 +193,6 @@ public class TransactionalMessageBridge {
 
     public PutMessageResult putHalfMessage(MessageExtBrokerInner messageInner) {
         return store.putMessage(parseHalfMessageInner(messageInner));
-    }
-
-    public CompletableFuture<PutMessageResult> asyncPutHalfMessage(MessageExtBrokerInner messageInner) {
-        return store.asyncPutMessage(parseHalfMessageInner(messageInner));
     }
 
     private MessageExtBrokerInner parseHalfMessageInner(MessageExtBrokerInner msgInner) {

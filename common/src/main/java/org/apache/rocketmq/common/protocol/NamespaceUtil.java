@@ -18,7 +18,6 @@ package org.apache.rocketmq.common.protocol;
 
 import org.apache.commons.lang3.StringUtils;
 import org.apache.rocketmq.common.MixAll;
-import org.apache.rocketmq.common.topic.TopicValidator;
 
 public class NamespaceUtil {
     public static final char NAMESPACE_SEPARATOR = '%';
@@ -39,19 +38,19 @@ public class NamespaceUtil {
             return resourceWithNamespace;
         }
 
-        StringBuilder stringBuilder = new StringBuilder();
+        StringBuffer strBuffer = new StringBuffer();
         if (isRetryTopic(resourceWithNamespace)) {
-            stringBuilder.append(MixAll.RETRY_GROUP_TOPIC_PREFIX);
+            strBuffer.append(MixAll.RETRY_GROUP_TOPIC_PREFIX);
         }
         if (isDLQTopic(resourceWithNamespace)) {
-            stringBuilder.append(MixAll.DLQ_GROUP_TOPIC_PREFIX);
+            strBuffer.append(MixAll.DLQ_GROUP_TOPIC_PREFIX);
         }
 
         String resourceWithoutRetryAndDLQ = withOutRetryAndDLQ(resourceWithNamespace);
         int index = resourceWithoutRetryAndDLQ.indexOf(NAMESPACE_SEPARATOR);
         if (index > 0) {
             String resourceWithoutNamespace = resourceWithoutRetryAndDLQ.substring(index + 1);
-            return stringBuilder.append(resourceWithoutNamespace).toString();
+            return strBuffer.append(resourceWithoutNamespace).toString();
         }
 
         return resourceWithNamespace;
@@ -91,17 +90,17 @@ public class NamespaceUtil {
         }
 
         String resourceWithoutRetryAndDLQ = withOutRetryAndDLQ(resourceWithOutNamespace);
-        StringBuilder stringBuilder = new StringBuilder();
+        StringBuffer strBuffer = new StringBuffer();
 
         if (isRetryTopic(resourceWithOutNamespace)) {
-            stringBuilder.append(MixAll.RETRY_GROUP_TOPIC_PREFIX);
+            strBuffer.append(MixAll.RETRY_GROUP_TOPIC_PREFIX);
         }
 
         if (isDLQTopic(resourceWithOutNamespace)) {
-            stringBuilder.append(MixAll.DLQ_GROUP_TOPIC_PREFIX);
+            strBuffer.append(MixAll.DLQ_GROUP_TOPIC_PREFIX);
         }
 
-        return stringBuilder.append(namespace).append(NAMESPACE_SEPARATOR).append(resourceWithoutRetryAndDLQ).toString();
+        return strBuffer.append(namespace).append(NAMESPACE_SEPARATOR).append(resourceWithoutRetryAndDLQ).toString();
 
     }
 
@@ -156,11 +155,11 @@ public class NamespaceUtil {
             return false;
         }
 
-        if (TopicValidator.isSystemTopic(resource) || MixAll.isSysConsumerGroup(resource)) {
+        if (MixAll.isSystemTopic(resource) || MixAll.isSysConsumerGroup(resource)) {
             return true;
         }
 
-        return false;
+        return MixAll.AUTO_CREATE_TOPIC_KEY_TOPIC.equals(resource);
     }
 
     public static boolean isRetryTopic(String resource) {

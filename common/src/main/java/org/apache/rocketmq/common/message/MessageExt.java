@@ -27,13 +27,18 @@ import org.apache.rocketmq.common.sysflag.MessageSysFlag;
 public class MessageExt extends Message {
     private static final long serialVersionUID = 5720810158625748049L;
 
-    private String brokerName;
-
+    /**
+     * 消息队列ID，4字节
+     */
     private int queueId;
 
     private int storeSize;
 
     private long queueOffset;
+
+    /**
+     * 消息系统flag，例如是否压缩、是否事务消息，4字节
+     */
     private int sysFlag;
     private long bornTimestamp;
     private SocketAddress bornHost;
@@ -42,6 +47,9 @@ public class MessageExt extends Message {
     private SocketAddress storeHost;
     private String msgId;
     private long commitLogOffset;
+    /**
+     * 消息体crc校验码
+     */
     private int bodyCRC;
     private int reconsumeTimes;
 
@@ -109,14 +117,6 @@ public class MessageExt extends Message {
         return socketAddress2ByteBuffer(this.storeHost, byteBuffer);
     }
 
-    public String getBrokerName() {
-        return brokerName;
-    }
-
-    public void setBrokerName(String brokerName) {
-        this.brokerName = brokerName;
-    }
-
     public int getQueueId() {
         return queueId;
     }
@@ -142,20 +142,18 @@ public class MessageExt extends Message {
     }
 
     public String getBornHostString() {
-        if (null != this.bornHost) {
-            InetAddress inetAddress = ((InetSocketAddress) this.bornHost).getAddress();
-
-            return null != inetAddress ? inetAddress.getHostAddress() : null;
+        if (this.bornHost != null) {
+            InetSocketAddress inetSocketAddress = (InetSocketAddress) this.bornHost;
+            return inetSocketAddress.getAddress().getHostAddress();
         }
 
         return null;
     }
 
     public String getBornHostNameString() {
-        if (null != this.bornHost) {
-            InetAddress inetAddress = ((InetSocketAddress) this.bornHost).getAddress();
-
-            return null != inetAddress ? inetAddress.getHostName() : null;
+        if (this.bornHost != null) {
+            InetSocketAddress inetSocketAddress = (InetSocketAddress) this.bornHost;
+            return inetSocketAddress.getAddress().getHostName();
         }
 
         return null;
@@ -247,7 +245,7 @@ public class MessageExt extends Message {
 
     @Override
     public String toString() {
-        return "MessageExt [brokerName=" + brokerName + ", queueId=" + queueId + ", storeSize=" + storeSize + ", queueOffset=" + queueOffset
+        return "MessageExt [queueId=" + queueId + ", storeSize=" + storeSize + ", queueOffset=" + queueOffset
             + ", sysFlag=" + sysFlag + ", bornTimestamp=" + bornTimestamp + ", bornHost=" + bornHost
             + ", storeTimestamp=" + storeTimestamp + ", storeHost=" + storeHost + ", msgId=" + msgId
             + ", commitLogOffset=" + commitLogOffset + ", bodyCRC=" + bodyCRC + ", reconsumeTimes="

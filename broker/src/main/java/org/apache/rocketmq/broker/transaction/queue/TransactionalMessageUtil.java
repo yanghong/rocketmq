@@ -17,7 +17,6 @@
 package org.apache.rocketmq.broker.transaction.queue;
 
 import org.apache.rocketmq.common.MixAll;
-import org.apache.rocketmq.common.topic.TopicValidator;
 
 import java.nio.charset.Charset;
 
@@ -26,11 +25,11 @@ public class TransactionalMessageUtil {
     public static Charset charset = Charset.forName("utf-8");
 
     public static String buildOpTopic() {
-        return TopicValidator.RMQ_SYS_TRANS_OP_HALF_TOPIC;
+        return MixAll.RMQ_SYS_TRANS_OP_HALF_TOPIC;
     }
 
     public static String buildHalfTopic() {
-        return TopicValidator.RMQ_SYS_TRANS_HALF_TOPIC;
+        return MixAll.RMQ_SYS_TRANS_HALF_TOPIC;
     }
 
     public static String buildConsumerGroup() {

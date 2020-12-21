@@ -147,6 +147,10 @@ public class BrokerController {
     private RemotingServer remotingServer;
     private RemotingServer fastRemotingServer;
     private TopicConfigManager topicConfigManager;
+
+    /**
+     *
+     */
     private ExecutorService sendMessageExecutor;
     private ExecutorService pullMessageExecutor;
     private ExecutorService replyMessageExecutor;
@@ -1240,7 +1244,6 @@ public class BrokerController {
         }
     }
 
-    public ExecutorService getSendMessageExecutor() {
-        return sendMessageExecutor;
-    }
+
+
 }

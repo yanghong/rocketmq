@@ -25,7 +25,7 @@ import java.util.Random;
 import org.apache.rocketmq.broker.BrokerController;
 import org.apache.rocketmq.broker.mqtrace.SendMessageContext;
 import org.apache.rocketmq.broker.mqtrace.SendMessageHook;
-import org.apache.rocketmq.common.topic.TopicValidator;
+import org.apache.rocketmq.broker.topic.TopicValidator;
 import org.apache.rocketmq.common.MixAll;
 import org.apache.rocketmq.common.TopicConfig;
 import org.apache.rocketmq.common.TopicFilterType;
@@ -49,12 +49,11 @@ import org.apache.rocketmq.logging.InternalLogger;
 import org.apache.rocketmq.logging.InternalLoggerFactory;
 import org.apache.rocketmq.remoting.common.RemotingHelper;
 import org.apache.rocketmq.remoting.exception.RemotingCommandException;
-import org.apache.rocketmq.remoting.netty.AsyncNettyRequestProcessor;
 import org.apache.rocketmq.remoting.netty.NettyRequestProcessor;
 import org.apache.rocketmq.remoting.protocol.RemotingCommand;
 import org.apache.rocketmq.store.MessageExtBrokerInner;
 
-public abstract class AbstractSendMessageProcessor extends AsyncNettyRequestProcessor implements NettyRequestProcessor {
+public abstract class AbstractSendMessageProcessor implements NettyRequestProcessor {
     protected static final InternalLogger log = InternalLoggerFactory.getLogger(LoggerName.BROKER_LOGGER_NAME);
 
     protected final static int DLQ_NUMS_PER_GROUP = 1;
@@ -174,9 +173,6 @@ public abstract class AbstractSendMessageProcessor extends AsyncNettyRequestProc
         }
 
         if (!TopicValidator.validateTopic(requestHeader.getTopic(), response)) {
-            return response;
-        }
-        if (TopicValidator.isNotAllowedSendTopic(requestHeader.getTopic(), response)) {
             return response;
         }
 

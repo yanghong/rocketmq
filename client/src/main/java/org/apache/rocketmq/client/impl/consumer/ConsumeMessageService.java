@@ -24,7 +24,7 @@ import org.apache.rocketmq.common.protocol.body.ConsumeMessageDirectlyResult;
 public interface ConsumeMessageService {
     void start();
 
-    void shutdown(long awaitTerminateMillis);
+    void shutdown();
 
     void updateCorePoolSize(int corePoolSize);
 

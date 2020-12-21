@@ -82,7 +82,6 @@ public class MQAdminImpl {
     public void createTopic(String key, String newTopic, int queueNum, int topicSysFlag) throws MQClientException {
         try {
             Validators.checkTopic(newTopic);
-            Validators.isSystemTopic(newTopic);
             TopicRouteData topicRouteData = this.mQClientFactory.getMQClientAPIImpl().getTopicRouteInfoFromNameServer(key, timeoutMillis);
             List<BrokerData> brokerDataList = topicRouteData.getBrokerDatas();
             if (brokerDataList != null && !brokerDataList.isEmpty()) {

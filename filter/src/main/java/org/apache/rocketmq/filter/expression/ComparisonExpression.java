@@ -90,11 +90,11 @@ public abstract class ComparisonExpression extends BinaryExpression implements B
     }
 
     public static BooleanExpression createIsNull(Expression left) {
-        return doCreateEqual(left, BooleanConstantExpression.NULL);
+        return doCreateEqual(left, ConstantExpression.NULL);
     }
 
     public static BooleanExpression createIsNotNull(Expression left) {
-        return UnaryExpression.createNOT(doCreateEqual(left, BooleanConstantExpression.NULL));
+        return UnaryExpression.createNOT(doCreateEqual(left, ConstantExpression.NULL));
     }
 
     public static BooleanExpression createNotEqual(Expression left, Expression right) {

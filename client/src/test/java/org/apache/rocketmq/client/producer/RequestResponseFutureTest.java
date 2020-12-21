@@ -37,7 +37,7 @@ public class RequestResponseFutureTest {
             @Override public void onException(Throwable e) {
             }
         });
-        future.setSendRequestOk(true);
+        future.setSendReqeustOk(true);
         future.executeRequestCallback();
         assertThat(cc.get()).isEqualTo(1);
     }

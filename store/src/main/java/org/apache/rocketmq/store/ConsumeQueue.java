@@ -152,14 +152,21 @@ public class ConsumeQueue {
         }
     }
 
+    /**
+     * 根据时间戳获取消息存储，二分法
+     * @param timestamp
+     * @return
+     */
     public long getOffsetInQueueByTime(final long timestamp) {
         MappedFile mappedFile = this.mappedFileQueue.getMappedFileByTime(timestamp);
         if (mappedFile != null) {
             long offset = 0;
+            // 首先计算最低查找偏移量
             int low = minLogicOffset > mappedFile.getFileFromOffset() ? (int) (minLogicOffset - mappedFile.getFileFromOffset()) : 0;
             int high = 0;
             int midOffset = -1, targetOffset = -1, leftOffset = -1, rightOffset = -1;
             long leftIndexValue = -1L, rightIndexValue = -1L;
+            // 获取当前文件中有效的最小消息物理偏移量
             long minPhysicOffset = this.defaultMessageStore.getMinPhyOffset();
             SelectMappedBufferResult sbr = mappedFile.selectMappedBuffer(0);
             if (null != sbr) {
@@ -195,6 +202,7 @@ public class ConsumeQueue {
                         }
                     }
 
+                    // 表示找到了存储时间戳
                     if (targetOffset != -1) {
 
                         offset = targetOffset;
@@ -488,6 +496,11 @@ public class ConsumeQueue {
         }
     }
 
+    /**
+     * 根据startIndex获取消息消费队列条目
+     * @param startIndex
+     * @return
+     */
     public SelectMappedBufferResult getIndexBuffer(final long startIndex) {
         int mappedFileSize = this.mappedFileSize;
         long offset = startIndex * CQ_STORE_UNIT_SIZE;
@@ -523,6 +536,11 @@ public class ConsumeQueue {
         this.minLogicOffset = minLogicOffset;
     }
 
+    /**
+     * 根据偏移量获取下一个文件的起始偏移量
+     * @param index
+     * @return
+     */
     public long rollNextFile(final long index) {
         int mappedFileSize = this.mappedFileSize;
         int totalUnitsInFile = mappedFileSize / CQ_STORE_UNIT_SIZE;

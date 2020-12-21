@@ -45,7 +45,6 @@ import org.apache.rocketmq.common.message.MessageExt;
 import org.apache.rocketmq.common.message.MessageQueue;
 import org.apache.rocketmq.common.protocol.body.CMResult;
 import org.apache.rocketmq.common.protocol.body.ConsumeMessageDirectlyResult;
-import org.apache.rocketmq.common.utils.ThreadUtils;
 import org.apache.rocketmq.logging.InternalLogger;
 import org.apache.rocketmq.remoting.common.RemotingHelper;
 
@@ -93,9 +92,9 @@ public class ConsumeMessageConcurrentlyService implements ConsumeMessageService 
         }, this.defaultMQPushConsumer.getConsumeTimeout(), this.defaultMQPushConsumer.getConsumeTimeout(), TimeUnit.MINUTES);
     }
 
-    public void shutdown(long awaitTerminateMillis) {
+    public void shutdown() {
         this.scheduledExecutorService.shutdown();
-        ThreadUtils.shutdownGracefully(this.consumeExecutor, awaitTerminateMillis, TimeUnit.MILLISECONDS);
+        this.consumeExecutor.shutdown();
         this.cleanExpireMsgExecutors.shutdown();
     }
 

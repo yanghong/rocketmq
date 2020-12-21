@@ -373,7 +373,7 @@ public class DefaultMQProducerTest {
         assertThat(responseMap).isNotNull();
         for (Map.Entry<String, RequestResponseFuture> entry : responseMap.entrySet()) {
             RequestResponseFuture future = entry.getValue();
-            future.setSendRequestOk(true);
+            future.setSendReqeustOk(true);
             message.setFlag(1);
             future.getRequestCallback().onSuccess(message);
         }

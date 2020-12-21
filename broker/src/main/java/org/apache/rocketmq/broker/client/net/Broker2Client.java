@@ -70,8 +70,7 @@ public class Broker2Client {
         try {
             this.brokerController.getRemotingServer().invokeOneway(channel, request, 10);
         } catch (Exception e) {
-            log.error("Check transaction failed because invoke producer exception. group={}, msgId={}, error={}",
-                    group, messageExt.getMsgId(), e.toString());
+            log.error("Check transaction failed because invoke producer exception. group={}, msgId={}", group, messageExt.getMsgId(), e.getMessage());
         }
     }
 
@@ -97,7 +96,7 @@ public class Broker2Client {
         try {
             this.brokerController.getRemotingServer().invokeOneway(channel, request, 10);
         } catch (Exception e) {
-            log.error("notifyConsumerIdsChanged exception. group={}, error={}", consumerGroup, e.toString());
+            log.error("notifyConsumerIdsChanged exception, " + consumerGroup, e.getMessage());
         }
     }
 
@@ -186,14 +185,14 @@ public class Broker2Client {
                         log.info("[reset-offset] reset offset success. topic={}, group={}, clientId={}",
                             topic, group, entry.getValue().getClientId());
                     } catch (Exception e) {
-                        log.error("[reset-offset] reset offset exception. topic={}, group={} ,error={}",
-                            topic, group, e.toString());
+                        log.error("[reset-offset] reset offset exception. topic={}, group={}",
+                            new Object[] {topic, group}, e);
                     }
                 } else {
                     response.setCode(ResponseCode.SYSTEM_ERROR);
                     response.setRemark("the client does not support this feature. version="
                         + MQVersion.getVersionDesc(version));
-                    log.warn("[reset-offset] the client does not support this feature. channel={}, version={}",
+                    log.warn("[reset-offset] the client does not support this feature. version={}",
                         RemotingHelper.parseChannelRemoteAddr(entry.getKey()), MQVersion.getVersionDesc(version));
                     return response;
                 }
@@ -254,7 +253,7 @@ public class Broker2Client {
                 result.setCode(ResponseCode.SYSTEM_ERROR);
                 result.setRemark("the client does not support this feature. version="
                     + MQVersion.getVersionDesc(version));
-                log.warn("[get-consumer-status] the client does not support this feature. channel={}, version={}",
+                log.warn("[get-consumer-status] the client does not support this feature. version={}",
                     RemotingHelper.parseChannelRemoteAddr(entry.getKey()), MQVersion.getVersionDesc(version));
                 return result;
             } else if (UtilAll.isBlank(originClientId) || originClientId.equals(clientId)) {
@@ -280,8 +279,8 @@ public class Broker2Client {
                     }
                 } catch (Exception e) {
                     log.error(
-                        "[get-consumer-status] get consumer status exception. topic={}, group={}, error={}",
-                        topic, group, e.toString());
+                        "[get-consumer-status] get consumer status exception. topic={}, group={}, offset={}",
+                        new Object[] {topic, group}, e);
                 }
 
                 if (!UtilAll.isBlank(originClientId) && originClientId.equals(clientId)) {

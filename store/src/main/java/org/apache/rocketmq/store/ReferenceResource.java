@@ -41,9 +41,11 @@ public abstract class ReferenceResource {
     }
 
     public void shutdown(final long intervalForcibly) {
+        // 初次调用为true
         if (this.available) {
             this.available = false;
             this.firstShutdownTimestamp = System.currentTimeMillis();
+            // 引用次数小于1的情况下才会释放资源
             this.release();
         } else if (this.getRefCount() > 0) {
             if ((System.currentTimeMillis() - this.firstShutdownTimestamp) >= intervalForcibly) {
@@ -54,6 +56,7 @@ public abstract class ReferenceResource {
     }
 
     public void release() {
+        // 将引用次数减1
         long value = this.refCount.decrementAndGet();
         if (value > 0)
             return;

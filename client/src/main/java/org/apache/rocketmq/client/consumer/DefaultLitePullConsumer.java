@@ -95,11 +95,6 @@ public class DefaultLitePullConsumer extends ClientConfig implements LitePullCon
     private int pullThreadNums = 20;
 
     /**
-     * Minimum commit offset interval time in milliseconds.
-     */
-    private static final long MIN_AUTOCOMMIT_INTERVAL_MILLIS = 1000;
-
-    /**
      * Maximum commit offset interval time in milliseconds.
      */
     private long autoCommitIntervalMillis = 5 * 1000;
@@ -279,7 +274,7 @@ public class DefaultLitePullConsumer extends ClientConfig implements LitePullCon
 
     @Override
     public Long committed(MessageQueue messageQueue) throws MQClientException {
-        return this.defaultLitePullConsumerImpl.committed(queueWithNamespace(messageQueue));
+        return this.defaultLitePullConsumerImpl.committed(messageQueue);
     }
 
     @Override
@@ -289,12 +284,12 @@ public class DefaultLitePullConsumer extends ClientConfig implements LitePullCon
 
     @Override
     public void seekToBegin(MessageQueue messageQueue) throws MQClientException {
-        this.defaultLitePullConsumerImpl.seekToBegin(queueWithNamespace(messageQueue));
+        this.defaultLitePullConsumerImpl.seekToBegin(messageQueue);
     }
 
     @Override
     public void seekToEnd(MessageQueue messageQueue) throws MQClientException {
-        this.defaultLitePullConsumerImpl.seekToEnd(queueWithNamespace(messageQueue));
+        this.defaultLitePullConsumerImpl.seekToEnd(messageQueue);
     }
 
     @Override
@@ -320,9 +315,7 @@ public class DefaultLitePullConsumer extends ClientConfig implements LitePullCon
     }
 
     public void setAutoCommitIntervalMillis(long autoCommitIntervalMillis) {
-        if (autoCommitIntervalMillis >= MIN_AUTOCOMMIT_INTERVAL_MILLIS) {
-            this.autoCommitIntervalMillis = autoCommitIntervalMillis;
-        }
+        this.autoCommitIntervalMillis = autoCommitIntervalMillis;
     }
 
     public int getPullBatchSize() {

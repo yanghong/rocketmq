@@ -42,27 +42,89 @@ import org.apache.rocketmq.store.util.LibC;
 import sun.nio.ch.DirectBuffer;
 
 public class MappedFile extends ReferenceResource {
+
+    /**
+     * 操作系统每页大小。默认4k
+     */
     public static final int OS_PAGE_SIZE = 1024 * 4;
     protected static final InternalLogger log = InternalLoggerFactory.getLogger(LoggerName.STORE_LOGGER_NAME);
 
+    /**
+     * 当前JVM实例中MappedFile虚拟内存
+     */
     private static final AtomicLong TOTAL_MAPPED_VIRTUAL_MEMORY = new AtomicLong(0);
 
+    /**
+     * 当前JVM实例中MappedFile对象个数
+     */
     private static final AtomicInteger TOTAL_MAPPED_FILES = new AtomicInteger(0);
+
+    /**
+     * 当前该文件的写指针，从0开始（内存映射文件中的写指针）
+     */
     protected final AtomicInteger wrotePosition = new AtomicInteger(0);
+
+    /**
+     * 当前文件的提交指针，如果开启transientStorePoolEnable ，则数据会存储在TransientStorePool中，然后提交到
+     * 内存映射ByteBuffer中，再刷写到磁盘。
+     */
     protected final AtomicInteger committedPosition = new AtomicInteger(0);
+
+    /**
+     * 刷写到磁盘指针，该指针之前的数据持久化到磁盘中
+     */
     private final AtomicInteger flushedPosition = new AtomicInteger(0);
+
+    /**
+     * 文件大小
+     */
     protected int fileSize;
+
+    /**
+     * 文件通道 nio
+     */
     protected FileChannel fileChannel;
+
     /**
      * Message will put to here first, and then reput to FileChannel if writeBuffer is not null.
+     * 堆内存ByteBuffer,如果不为空，数据首先将存储在该Buffer中，然后提交到MappedFile对应的内存映射文件Buffer。
+     * transientStorePoolEnable为true时不为空。
      */
     protected ByteBuffer writeBuffer = null;
+
+    /**
+     * 堆内存池
+     */
     protected TransientStorePool transientStorePool = null;
+
+    /**
+     * 文件名称
+     */
     private String fileName;
+
+    /**
+     * 该文件的初始偏移量
+     */
     private long fileFromOffset;
+
+    /**
+     * 物理文件
+     */
     private File file;
+
+    /**
+     * 物理文件对应的内存映射BUffer
+     */
     private MappedByteBuffer mappedByteBuffer;
+
+    /**
+     * 文件最后一次内容写入时间
+     */
     private volatile long storeTimestamp = 0;
+
+    /**
+     * 是否是MappedFileQueue队列中第一个文件
+     */
     private boolean firstCreateInQueue = false;
 
     public MappedFile() {
@@ -141,6 +203,14 @@ public class MappedFile extends ReferenceResource {
         return TOTAL_MAPPED_VIRTUAL_MEMORY.get();
     }
 
+    /**
+     * 根据是否开启transientStorePoolEnable存在两种初始化情况。transientStorePoolEnable为true表示内容先存储在堆
+     * 外内存，然后通过Commit线程将数据提交到内存映射Buffer中，再通过Flush线程将内存映射Buffer中的数据持久化到磁盘中。
+     * @param fileName
+     * @param fileSize
+     * @param transientStorePool
+     * @throws IOException
+     */
     public void init(final String fileName, final int fileSize,
         final TransientStorePool transientStorePool) throws IOException {
         init(fileName, fileSize);
@@ -148,6 +218,13 @@ public class MappedFile extends ReferenceResource {
         this.transientStorePool = transientStorePool;
     }
 
+    /**
+     * 初始化fileFromOffset为文件名，也就是文件名代表该文件的起始偏移量，通过RandomAccessFile创建
+     * 读写文件通道，并将文件内容使用NIO的内存映射Buffer将文件映射到内存中
+     * @param fileName
+     * @param fileSize
+     * @throws IOException
+     */
     private void init(final String fileName, final int fileSize) throws IOException {
         this.fileName = fileName;
         this.fileSize = fileSize;
@@ -266,6 +343,9 @@ public class MappedFile extends ReferenceResource {
     }
 
     /**
+     * 刷写磁盘，直接调用mappedByteBuffer或者fileChannel的force方法将内存中的数据持久化
+     * 到磁盘，那么flushedPosition应该等于MappedByteBuffer中的写指针；
+     * 如果writeBuffer不为空，则flushPosition应等于上一次commit指针
      * @return The current flushed position
      */
     public int flush(final int flushLeastPages) {
@@ -294,6 +374,14 @@ public class MappedFile extends ReferenceResource {
         return this.getFlushedPosition();
     }
 
+    /**
+     * 内存映射文件的提交动作由MappedFile的commit方法实现
+     * commitLeastPages为本次提交最小的页数，如果待提交数据不满commitLeastPages，则
+     * 不执行本次提交操作，待下次提交。
+     * writeBuffer如果为空，直接返回wrotePosition指针，无需执行commit操作，表明commit操作主体是writeBuffer
+     * @param commitLeastPages
+     * @return
+     */
     public int commit(final int commitLeastPages) {
         if (writeBuffer == null) {
             //no need to commit data to file channel, so just regard wrotePosition as committedPosition.
@@ -317,6 +405,13 @@ public class MappedFile extends ReferenceResource {
         return this.committedPosition.get();
     }
 
+    /**
+     * 具体的提交实现。首先创建writeBuffer的共享缓存区，然后将新创建的position回退到上一次提交的位置(commitedPosition)
+     * 设置limit为wrotePosition（当前最大有效数据指针）
+     * 然后把commitedPosition到wrotePosition的数据复制（写入）到FileChannel中，然后更新commitedPosition指针为
+     * wrotePosition。commit的作用就是将MappedFile#writeBuffer中的数据提交到文件通道FileChannel中。
+     * @param commitLeastPages
+     */
     protected void commit0(final int commitLeastPages) {
         int writePos = this.wrotePosition.get();
         int lastCommittedPosition = this.committedPosition.get();
@@ -350,14 +445,22 @@ public class MappedFile extends ReferenceResource {
         return write > flush;
     }
 
+    /**
+     * 判断是否执行commit操作。
+     * @param commitLeastPages
+     * @return
+     */
     protected boolean isAbleToCommit(final int commitLeastPages) {
         int flush = this.committedPosition.get();
         int write = this.wrotePosition.get();
 
+        // 如果文件已满返回true
         if (this.isFull()) {
             return true;
         }
 
+        // 如果commitLeastPages大于0，则比较wrotePosition（当前writeBuffer的写指针）与上次提交的指针
+        // （committedPosition）的差值，除以OS_PAGE_SIZE得到当前脏页的数量
         if (commitLeastPages > 0) {
             return ((write / OS_PAGE_SIZE) - (flush / OS_PAGE_SIZE)) >= commitLeastPages;
         }
@@ -398,6 +501,14 @@ public class MappedFile extends ReferenceResource {
         return null;
     }
 
+    /**
+     * 查找pos到当前最大可读之间的数据，由于在整个写入期间都未曾改变MappedByteBuffer的指针
+     * ，所以mappedByteBuffer.slice()方法返回的共享缓存区空间为整个MappedFile,然后通过设置byteBUffer
+     * 的position为待查找的值，读取字节为当前可读字节长度最终返回ByteBuffer的limit（可读最大长度）为
+     * size
+     * @param pos
+     * @return
+     */
     public SelectMappedBufferResult selectMappedBuffer(int pos) {
         int readPosition = getReadPosition();
         if (pos < readPosition && pos >= 0) {
@@ -414,6 +525,14 @@ public class MappedFile extends ReferenceResource {
         return null;
     }
 
+    /**
+     * 如果available为true，表示MappedFile当前可用，无需清理
+     * 如果资源已经被清除，返回true
+     * 如果是堆外内存，调用堆外内存的clearup方法，维护MappedFile类变量TOTAL_MAPPED_VIRTUAL_MEMORY、
+     * TOTAL_MAPPED_FILES并返回true，表示cleanupOver为true
+     * @param currentRef
+     * @return
+     */
     @Override
     public boolean cleanup(final long currentRef) {
         if (this.isAvailable()) {
@@ -435,6 +554,11 @@ public class MappedFile extends ReferenceResource {
         return true;
     }
 
+    /**
+     * intervalForcibly 表示拒绝被销毁的最大存活时间
+     * @param intervalForcibly
+     * @return
+     */
     public boolean destroy(final long intervalForcibly) {
         this.shutdown(intervalForcibly);
 
@@ -471,6 +595,8 @@ public class MappedFile extends ReferenceResource {
     }
 
     /**
+     * RocketMQ文件的一个组织方式是内存映射文件，预先申请一块连续的固定大小的内存，需要一套
+     * 指针标识当前最大有效数据的位置，获取最大有效数据偏移量的方法由下面方法实现
      * @return The max position which have valid data
      */
     public int getReadPosition() {

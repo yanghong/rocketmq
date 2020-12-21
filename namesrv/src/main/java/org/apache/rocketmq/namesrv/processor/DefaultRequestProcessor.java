@@ -54,11 +54,10 @@ import org.apache.rocketmq.common.protocol.route.TopicRouteData;
 import org.apache.rocketmq.namesrv.NamesrvController;
 import org.apache.rocketmq.remoting.common.RemotingHelper;
 import org.apache.rocketmq.remoting.exception.RemotingCommandException;
-import org.apache.rocketmq.remoting.netty.AsyncNettyRequestProcessor;
 import org.apache.rocketmq.remoting.netty.NettyRequestProcessor;
 import org.apache.rocketmq.remoting.protocol.RemotingCommand;
 
-public class DefaultRequestProcessor extends AsyncNettyRequestProcessor implements NettyRequestProcessor {
+public class DefaultRequestProcessor implements NettyRequestProcessor {
     private static InternalLogger log = InternalLoggerFactory.getLogger(LoggerName.NAMESRV_LOGGER_NAME);
 
     protected final NamesrvController namesrvController;
@@ -97,7 +96,7 @@ public class DefaultRequestProcessor extends AsyncNettyRequestProcessor implemen
                 }
             case RequestCode.UNREGISTER_BROKER:
                 return this.unregisterBroker(ctx, request);
-            case RequestCode.GET_ROUTEINFO_BY_TOPIC:
+            case RequestCode.GET_ROUTEINTO_BY_TOPIC:
                 return this.getRouteInfoByTopic(ctx, request);
             case RequestCode.GET_BROKER_CLUSTER_INFO:
                 return this.getBrokerClusterInfo(ctx, request);
@@ -384,12 +383,10 @@ public class DefaultRequestProcessor extends AsyncNettyRequestProcessor implemen
 
         int wipeTopicCnt = this.namesrvController.getRouteInfoManager().wipeWritePermOfBrokerByLock(requestHeader.getBrokerName());
 
-        if (ctx != null) {
-            log.info("wipe write perm of broker[{}], client: {}, {}",
-                    requestHeader.getBrokerName(),
-                    RemotingHelper.parseChannelRemoteAddr(ctx.channel()),
-                    wipeTopicCnt);
-        }
+        log.info("wipe write perm of broker[{}], client: {}, {}",
+            requestHeader.getBrokerName(),
+            RemotingHelper.parseChannelRemoteAddr(ctx.channel()),
+            wipeTopicCnt);
 
         responseHeader.setWipeTopicCount(wipeTopicCnt);
         response.setCode(ResponseCode.SUCCESS);
@@ -504,9 +501,7 @@ public class DefaultRequestProcessor extends AsyncNettyRequestProcessor implemen
     }
 
     private RemotingCommand updateConfig(ChannelHandlerContext ctx, RemotingCommand request) {
-        if (ctx != null) {
-            log.info("updateConfig called by {}", RemotingHelper.parseChannelRemoteAddr(ctx.channel()));
-        }
+        log.info("updateConfig called by {}", RemotingHelper.parseChannelRemoteAddr(ctx.channel()));
 
         final RemotingCommand response = RemotingCommand.createResponseCommand(null);
 
@@ -519,6 +514,13 @@ public class DefaultRequestProcessor extends AsyncNettyRequestProcessor implemen
                 log.error("updateConfig byte array to string error: ", e);
                 response.setCode(ResponseCode.SYSTEM_ERROR);
                 response.setRemark("UnsupportedEncodingException " + e);
+                return response;
+            }
+
+            if (bodyStr == null) {
+                log.error("updateConfig get null body!");
+                response.setCode(ResponseCode.SYSTEM_ERROR);
+                response.setRemark("string2Properties error");
                 return response;
             }
 
